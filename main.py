@@ -94,8 +94,6 @@ def train(net, optimizer, criterion, epochs=50, patience=5):
     for epoch in range(epochs):
         net.train()
         running_loss = 0.0
-        running_correct = 0
-        running_total = 0
         correct = 0
         total = 0
         for i, data in enumerate(trainloader, 0):
@@ -106,28 +104,29 @@ def train(net, optimizer, criterion, epochs=50, patience=5):
             loss.backward()
             optimizer.step()
 
-            running_loss += loss.item()
+            # Calculate per-batch loss and accuracy
+            batch_loss = loss.item()
             _, predicted = torch.max(outputs.data, 1)
-            running_total += labels.size(0)
-            running_correct += (predicted == labels).sum().item()
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
+            batch_correct = (predicted == labels).sum().item()
+            batch_total = labels.size(0)
+            batch_acc = 100.0 * batch_correct / batch_total
 
-            # Log mini-batch loss and accuracy to TensorBoard
-            mini_acc = 100.0 * running_correct / running_total if running_total > 0 else 0
-            writer.add_scalar('MiniBatch/Loss', running_loss, global_step)
-            writer.add_scalar('MiniBatch/Accuracy', mini_acc, global_step)
+            # Log per-batch loss and accuracy to TensorBoard
+            writer.add_scalar('MiniBatch/Loss', batch_loss, global_step)
+            writer.add_scalar('MiniBatch/Accuracy', batch_acc, global_step)
             global_step += 1
+
+            # For epoch stats
+            running_loss += batch_loss * batch_total
+            correct += batch_correct
+            total += batch_total
 
             # Console log every 2000 mini-batches
             if i % 2000 == 1999:
-                print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}, accuracy: {mini_acc:.2f}%')
-                running_loss = 0.0
-                running_correct = 0
-                running_total = 0
+                print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / total:.3f}, accuracy: {100.0 * correct / total:.2f}%')
 
         # Log epoch loss and accuracy to TensorBoard
-        epoch_loss = running_loss / len(trainloader)
+        epoch_loss = running_loss / total
         epoch_acc = 100.0 * correct / total
         writer.add_scalar('Epoch/Loss', epoch_loss, epoch)
         writer.add_scalar('Epoch/Accuracy', epoch_acc, epoch)
@@ -177,15 +176,15 @@ if __name__ == '__main__':
     setup_data(dataset_name)
     dataiter = iter(trainloader)
     images, labels = next(dataiter)
-    imshow(images[:8], labels[:8], classes)
+    print(f"Dataset: {dataset_name.upper()}, Number of classes: {len(classes)}, Input channels: {input_channels}")
 
     # Dynamically create the model for the dataset
-    net = Net(input_channels=input_channels, num_classes=num_classes)
+    net = Net(input_channels=input_channels, num_classes=num_classes, input_size=28 if dataset_name == "mnist" else 32)    
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
 
     # Uncomment to train
-    # train(net, optimizer, criterion, epochs=10)
+    train(net, optimizer, criterion, epochs=10, patience=2)
 
     # Load best model and test
     checkpoint_path = get_checkpoint_path(dataset_name, "best")
