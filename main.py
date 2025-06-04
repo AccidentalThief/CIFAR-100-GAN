@@ -61,11 +61,15 @@ def imshow(images, labels=None, classes=None):
     plt.tight_layout()
     plt.show()
 
-def train(net, optimizer, criterion, epochs=10):
-    writer = SummaryWriter()  # Creates a new TensorBoard log directory
+def train(net, optimizer, criterion, epochs=50, patience=5):
+    writer = SummaryWriter()
     print("Starting training...")
     global_step = 0
+    best_acc = 0.0
+    epochs_no_improve = 0
+
     for epoch in range(epochs):
+        net.train()
         running_loss = 0.0
         running_correct = 0
         running_total = 0
@@ -106,11 +110,23 @@ def train(net, optimizer, criterion, epochs=10):
         writer.add_scalar('Epoch/Accuracy', epoch_acc, epoch)
         print(f'Epoch {epoch+1}: Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.2f}%')
 
+        # Early stopping and checkpointing
+        if epoch_acc > best_acc:
+            best_acc = epoch_acc
+            epochs_no_improve = 0
+            torch.save(net.state_dict(), './cifar_net_best.pth')
+            print(f"Checkpoint: Saved new best model at epoch {epoch+1} with accuracy {epoch_acc:.2f}%")
+        else:
+            epochs_no_improve += 1
+            if epochs_no_improve >= patience:
+                print(f"No improvement for {patience} epochs, stopping early at epoch {epoch+1}.")
+                break
+
     writer.close()
     print('Finished Training')
-    PATH = './cifar_net.pth'
+    PATH = './cifar_net_last.pth'
     torch.save(net.state_dict(), PATH)
-    print(f'Model saved to {PATH}')
+    print(f'Last model saved to {PATH}')
 
 def test(net):
     net.eval()  # Set model to evaluation mode
@@ -147,8 +163,5 @@ if __name__ == '__main__':
     net.load_state_dict(torch.load(checkpoint_path))
     print(f"Loaded model weights from {checkpoint_path}")
 
-    # Continue training for another 50 epochs
-    train(net, optimizer, criterion, epochs=10)
+    train(net, optimizer, criterion, epochs=100)
     test(net)
-
-
