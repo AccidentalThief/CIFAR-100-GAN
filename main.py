@@ -130,6 +130,12 @@ if __name__ == '__main__':
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
+    # Load previously trained weights
+    checkpoint_path = './cifar_net.pth'
+    net.load_state_dict(torch.load(checkpoint_path))
+    print(f"Loaded model weights from {checkpoint_path}")
+
+    # Continue training for another 50 epochs
     train(net, optimizer, criterion, epochs=50)
     test(net)
 
