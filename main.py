@@ -1,15 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
 import torchvision
 import torchvision.transforms as transforms
-
 import matplotlib.pyplot as plt
 import numpy as np
-
-from net import Net
 from torch.utils.tensorboard import SummaryWriter
+
+# Import your model here (Net should accept input_channels and num_classes)
+from net import Net
 
 trainset = None
 testset = None
@@ -18,48 +17,72 @@ testloader = None
 classes = None
 batch_size = 32
 
-def setup_data():
-    """
-    Setup the data for CIFAR-100 dataset.
-    Downloads the dataset if not already present.
-    """
-    global trainset, testset, trainloader, testloader, classes
+def get_dataset(name, train, transform):
+    if name.lower() == "cifar100":
+        dataset = torchvision.datasets.CIFAR100(root='./data', train=train, download=True, transform=transform)
+        num_classes = 100
+        input_channels = 3
+    elif name.lower() == "cifar10":
+        dataset = torchvision.datasets.CIFAR10(root='./data', train=train, download=True, transform=transform)
+        num_classes = 10
+        input_channels = 3
+    elif name.lower() == "mnist":
+        dataset = torchvision.datasets.MNIST(root='./data', train=train, download=True, transform=transform)
+        num_classes = 10
+        input_channels = 1
+    else:
+        raise ValueError(f"Unknown dataset: {name}")
+    return dataset, num_classes, input_channels
 
-    print("Setting up CIFAR-100 dataset...")
+def setup_data(dataset_name="cifar100"):
+    global trainset, testset, trainloader, testloader, classes, num_classes, input_channels
 
-    transform = transforms.Compose(
-        [transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    print(f"Setting up {dataset_name.upper()} dataset...")
 
-    trainset = torchvision.datasets.CIFAR100(root='./data', train=True,
-                                            download=True, transform=transform)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
-                                            shuffle=True, num_workers=2)
+    # Choose transforms based on dataset
+    if dataset_name.lower() in ["cifar100", "cifar10"]:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5,) * 3, (0.5,) * 3)
+        ])
+    elif dataset_name.lower() == "mnist":
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
 
-    testset = torchvision.datasets.CIFAR100(root='./data', train=False,
-                                        download=True, transform=transform)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
-                                            shuffle=False, num_workers=2)
+    trainset, num_classes, input_channels = get_dataset(dataset_name, train=True, transform=transform)
+    testset, _, _ = get_dataset(dataset_name, train=False, transform=transform)
 
-    classes = trainset.classes  # Dynamically read class names
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
 
-    print("CIFAR-100 dataset setup complete.")
+    classes = trainset.classes if hasattr(trainset, 'classes') else [str(i) for i in range(num_classes)]
+
+    print(f"{dataset_name.upper()} dataset setup complete.")
 
 def imshow(images, labels=None, classes=None):
-    # images: tensor of shape (B, C, H, W)
-    images = images / 2 + 0.5  # unnormalize
+    images = images / 2 + 0.5  # unnormalize (approximate for visualization)
     np_images = images.numpy()
     batch_size = np_images.shape[0]
     fig, axes = plt.subplots(1, batch_size, figsize=(batch_size * 2, 2.5))
     if batch_size == 1:
         axes = [axes]
     for idx, ax in enumerate(axes):
-        ax.imshow(np.transpose(np_images[idx], (1, 2, 0)))
+        if np_images.shape[1] == 1:
+            ax.imshow(np_images[idx][0], cmap='gray')
+        else:
+            ax.imshow(np.transpose(np_images[idx], (1, 2, 0)))
         ax.axis('off')
         if labels is not None and classes is not None:
             ax.set_title(classes[labels[idx]], fontsize=8, color='black', pad=10)
     plt.tight_layout()
     plt.show()
+
+def get_checkpoint_path(name, kind="best"):
+    return f'./{name.lower()}_net_{kind}.pth'
 
 def train(net, optimizer, criterion, epochs=50, patience=5):
     writer = SummaryWriter()
@@ -114,7 +137,7 @@ def train(net, optimizer, criterion, epochs=50, patience=5):
         if epoch_acc > best_acc:
             best_acc = epoch_acc
             epochs_no_improve = 0
-            torch.save(net.state_dict(), './cifar_net_best.pth')
+            torch.save(net.state_dict(), get_checkpoint_path(dataset_name, "best"))
             print(f"Checkpoint: Saved new best model at epoch {epoch+1} with accuracy {epoch_acc:.2f}%")
         else:
             epochs_no_improve += 1
@@ -124,12 +147,12 @@ def train(net, optimizer, criterion, epochs=50, patience=5):
 
     writer.close()
     print('Finished Training')
-    PATH = './cifar_net_last.pth'
+    PATH = get_checkpoint_path(dataset_name, "last")
     torch.save(net.state_dict(), PATH)
     print(f'Last model saved to {PATH}')
 
 def test(net):
-    net.eval()  # Set model to evaluation mode
+    net.eval()
     correct = 0
     total = 0
     test_loss = 0.0
@@ -146,22 +169,30 @@ def test(net):
     avg_loss = test_loss / total
     accuracy = 100.0 * correct / total
     print(f'Test set: Average loss: {avg_loss:.4f}, Accuracy: {correct}/{total} ({accuracy:.2f}%)')
-    net.train()  # Set back to train mode if needed
+    net.train()
 
 if __name__ == '__main__':
-    setup_data()
-    # Ensure the dataset is set up
+    # Choose your dataset here: "cifar100", "cifar10", or "mnist"
+    dataset_name = "mnist"
+    setup_data(dataset_name)
     dataiter = iter(trainloader)
     images, labels = next(dataiter)
+    imshow(images[:8], labels[:8], classes)
 
-    net = Net()
+    # Dynamically create the model for the dataset
+    net = Net(input_channels=input_channels, num_classes=num_classes)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
 
-    # Load previously trained weights
-    checkpoint_path = './cifar_net.pth'
-    net.load_state_dict(torch.load(checkpoint_path))
-    print(f"Loaded model weights from {checkpoint_path}")
+    # Uncomment to train
+    # train(net, optimizer, criterion, epochs=10)
 
-    train(net, optimizer, criterion, epochs=100)
+    # Load best model and test
+    checkpoint_path = get_checkpoint_path(dataset_name, "best")
+    try:
+        net.load_state_dict(torch.load(checkpoint_path))
+        print(f"Loaded model weights from {checkpoint_path}")
+    except Exception as e:
+        print(f"Could not load checkpoint: {e}")
+
     test(net)

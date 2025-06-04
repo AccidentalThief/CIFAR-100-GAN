@@ -4,10 +4,10 @@ import torch.nn.functional as F
 
 
 class Net(nn.Module):
-    def __init__(self):
+    def __init__(self, input_channels=3, num_classes=100):
         super().__init__()
         self.features = nn.Sequential(
-            nn.Conv2d(3, 64, 3, padding=1),  # 32x32x3 -> 32x32x64
+            nn.Conv2d(input_channels, 64, 3, padding=1),  # 32x32xC -> 32x32x64
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.Conv2d(64, 64, 3, padding=1), # 32x32x64 -> 32x32x64
@@ -36,7 +36,7 @@ class Net(nn.Module):
             nn.Linear(256 * 4 * 4, 512),
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),
-            nn.Linear(512, 100)
+            nn.Linear(512, num_classes)
         )
 
     def forward(self, x):
