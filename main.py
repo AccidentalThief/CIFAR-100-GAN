@@ -113,12 +113,24 @@ def train(net, optimizer, criterion, epochs=10):
     print(f'Model saved to {PATH}')
 
 def test(net):
-    dataiter = iter(testloader)
-    images, labels = next(dataiter)
-
-    # show images with labels under each image
-    imshow(images, labels, classes)
-    print('GroundTruth: ', ' '.join(f'{classes[labels[j]]:5s}' for j in range(len(labels))))
+    net.eval()  # Set model to evaluation mode
+    correct = 0
+    total = 0
+    test_loss = 0.0
+    criterion = nn.CrossEntropyLoss()
+    with torch.no_grad():
+        for data in testloader:
+            images, labels = data
+            outputs = net(images)
+            loss = criterion(outputs, labels)
+            test_loss += loss.item() * labels.size(0)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+    avg_loss = test_loss / total
+    accuracy = 100.0 * correct / total
+    print(f'Test set: Average loss: {avg_loss:.4f}, Accuracy: {correct}/{total} ({accuracy:.2f}%)')
+    net.train()  # Set back to train mode if needed
 
 if __name__ == '__main__':
     setup_data()
@@ -136,7 +148,7 @@ if __name__ == '__main__':
     print(f"Loaded model weights from {checkpoint_path}")
 
     # Continue training for another 50 epochs
-    train(net, optimizer, criterion, epochs=50)
+    train(net, optimizer, criterion, epochs=10)
     test(net)
 
 
