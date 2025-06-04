@@ -84,12 +84,21 @@ def imshow(images, labels=None, classes=None):
 def get_checkpoint_path(name, kind="best"):
     return f'./{name.lower()}_net_{kind}.pth'
 
-def train(net, optimizer, criterion, epochs=50, patience=5):
+def train(net, optimizer, criterion, epochs=50, patience=5, resume_best=False, dataset_name="cifar100"):
     writer = SummaryWriter()
     print("Starting training...")
     global_step = 0
     best_acc = 0.0
     epochs_no_improve = 0
+
+    # Optionally resume from best checkpoint
+    if resume_best:
+        best_path = get_checkpoint_path(dataset_name, "best")
+        try:
+            net.load_state_dict(torch.load(best_path))
+            print(f"Resumed training from {best_path}")
+        except Exception as e:
+            print(f"Could not load checkpoint: {e} (starting from scratch)")
 
     for epoch in range(epochs):
         net.train()
@@ -184,7 +193,7 @@ if __name__ == '__main__':
     optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
 
     # Uncomment to train
-    train(net, optimizer, criterion, epochs=10, patience=2)
+    # train(net, optimizer, criterion, epochs=10, patience=2)
 
     # Load best model and test
     checkpoint_path = get_checkpoint_path(dataset_name, "best")
