@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-class Net(nn.Module):
+class ClassifierNet(nn.Module):
     def __init__(self, input_channels=3, num_classes=100, input_size=32):
         super().__init__()
         self.features = nn.Sequential(
