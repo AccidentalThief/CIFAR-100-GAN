@@ -2,31 +2,28 @@ import torch
 import torch.nn as nn
 
 class Discriminator(nn.Module):
-    def __init__(self, input_channels=3, input_size=32):
+    def __init__(self, n_classes=10, input_channels=1, input_size=28):
         super().__init__()
-        self.main = nn.Sequential(
-            # Input: (input_channels) x 32 x 32
-            nn.Conv2d(input_channels, 64, 4, 2, 1, bias=False),  # 64 x 16 x 16
-            nn.BatchNorm2d(64),
+        self.n_classes = n_classes
+        self.input_size = input_size
+        self.label_emb = nn.Embedding(n_classes, input_size * input_size)
+        self.conv = nn.Sequential(
+            nn.Conv2d(input_channels + 1, 64, 4, 2, 1),
             nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(64, 128, 4, 2, 1, bias=False),  # 128 x 8 x 8
+            nn.Conv2d(64, 128, 4, 2, 1),
             nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(128, 256, 4, 2, 1, bias=False),  # 256 x 4 x 4
-            nn.BatchNorm2d(256),
-            nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(256, 512, 4, 2, 1, bias=False),  # 512 x 2 x 2
-            nn.BatchNorm2d(512),
-            nn.LeakyReLU(0.2, inplace=True),
-
             nn.Flatten(),
-            nn.Dropout(0.3),
-            nn.Linear(512 * (input_size // 16) * (input_size // 16), 1)
-            # No sigmoid: use BCEWithLogitsLoss for stability
+        )
+        ds_size = input_size // 4
+        self.adv_layer = nn.Sequential(
+            nn.Linear(128 * ds_size * ds_size, 1)
         )
 
-    def forward(self, x):
-        return self.main(x)
+    def forward(self, img, labels):
+        # Embed labels to (batch, H*W), then reshape to (batch, 1, H, W)
+        label_map = self.label_emb(labels).view(labels.size(0), 1, self.input_size, self.input_size)
+        d_in = torch.cat((img, label_map), 1)
+        out = self.conv(d_in)
+        validity = self.adv_layer(out)
+        return validity
