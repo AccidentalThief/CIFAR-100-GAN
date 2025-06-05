@@ -1,5 +1,6 @@
 import os
 import torch
+import math
 from torch.utils.tensorboard import SummaryWriter
 import datetime
 from utils.test import test  # Add this import at the top if not present
@@ -286,7 +287,7 @@ def train_cgan(
             total += batch_size
             global_step += 1
 
-            if i % 100 == 0:
+            if i % math.ceil(batch_size / 5) == 0:
                 print(f"[cGAN] [Epoch {epoch+1}/{epochs}] [Batch {i}/{len(trainloader)}] "
                       f"[D loss: {d_loss.item():.4f}] [G loss: {g_loss.item():.4f}]")
 
