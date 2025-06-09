@@ -14,14 +14,6 @@ import torch.nn as nn
 import random
 import numpy as np
 
-seed = int.from_bytes(os.urandom(4), 'little')
-print(f"[Main] Using random seed: {seed}")
-torch.manual_seed(seed)
-np.random.seed(seed)
-random.seed(seed)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(seed)
-
 def weights_init_normal(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1 or classname.find('Linear') != -1:
@@ -81,6 +73,7 @@ if __name__ == "__main__":
 
         # Use the train utility for training the discriminator
         print(f"[Main] Training discriminator...")
+        
         train(
             net,
             optimizer,
@@ -93,6 +86,7 @@ if __name__ == "__main__":
             label_fn=label_fn,
             metric_fn=metric_fn
         )
+        
     elif mode == "gan":
         # GAN mode: set up both generator and discriminator
         net = Discriminator(n_classes=num_classes, input_channels=input_channels, input_size=input_size)
@@ -121,12 +115,14 @@ if __name__ == "__main__":
             latent_dim=latent_dim,
             n_classes=num_classes,
             device=device,
-            epochs=100,
-            lr=0.000001,
+            epochs=5,
+            lr=0.0002,
             model_name=model_name,
             resume_best=False,
             gen_rate=2,
-            lr_ratio=5
+            lr_ratio=7,
+            metric_fn=metric_fn,
+            label_fn=label_fn,
         )
         
     else:
