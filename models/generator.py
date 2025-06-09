@@ -13,14 +13,14 @@ class Generator(nn.Module):
             nn.ReLU(True),
         )
         self.conv_blocks = nn.Sequential(
-            nn.BatchNorm2d(128),
+            nn.InstanceNorm2d(128),
             nn.Upsample(scale_factor=2),
             nn.Conv2d(128, 128, 3, stride=1, padding=1),
-            nn.BatchNorm2d(128),
+            nn.InstanceNorm2d(128),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Upsample(scale_factor=2),
             nn.Conv2d(128, 64, 3, stride=1, padding=1),
-            nn.BatchNorm2d(64),
+            nn.InstanceNorm2d(64),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(64, output_channels, 3, stride=1, padding=1),
             nn.Tanh(),

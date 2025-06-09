@@ -116,11 +116,11 @@ if __name__ == "__main__":
             n_classes=num_classes,
             device=device,
             epochs=100,
-            lr=0.0001,
+            lr=0.0002,
             model_name=model_name,
             resume_best=False,
             gen_rate=2,
-            lr_ratio=7,
+            lr_ratio=10,
             metric_fn=metric_fn,
             label_fn=label_fn,
         )
