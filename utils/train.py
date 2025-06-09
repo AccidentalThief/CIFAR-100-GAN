@@ -282,14 +282,17 @@ def train_cgan(
                 metric = metric_fn(discriminator(real_imgs, labels), valid)
                 writer.add_scalar('MiniBatch/Metric', metric, global_step)
                 running_metric += metric * batch_size
+            else:
+                metric = 0
+                running_metric += metric * batch_size
             running_g_loss += g_loss.item() * batch_size
             running_d_loss += d_loss.item() * batch_size
             total += batch_size
             global_step += 1
 
-            if i % math.ceil(batch_size / 5) == 0:
+            if i % (batch_size // 5) == 0:
                 print(f"[cGAN] [Epoch {epoch+1}/{epochs}] [Batch {i}/{len(trainloader)}] "
-                      f"[D loss: {d_loss.item():.4f}] [G loss: {g_loss.item():.4f}]")
+                      f"[D loss: {d_loss.item():.4f}] [G loss: {g_loss.item():.4f}] [Metric: {metric:.4f}]")
 
         # Epoch logging
         epoch_g_loss = running_g_loss / total
