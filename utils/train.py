@@ -4,6 +4,8 @@ import math
 from torch.utils.tensorboard import SummaryWriter
 import datetime
 from utils.test import test  # Add this import at the top if not present
+import torchvision.utils as vutils
+import matplotlib.pyplot as plt
 
 def get_checkpoint_path(name, kind="best", subdir="checkpoints"):
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', subdir))
@@ -303,6 +305,10 @@ def train_cgan(
         writer.add_scalar('Epoch/Metric', epoch_metric, epoch)
         print(f"[cGAN] Epoch {epoch+1}: D_Loss: {epoch_d_loss:.4f}, G_Loss: {epoch_g_loss:.4f}, Metric: {epoch_metric:.4f}")
 
+        # Save generated images
+        grid = save_cgan_samples(generator, epoch, latent_dim, n_classes, device)
+        writer.add_image('Generated_Images', grid, epoch)  # if you want TensorBoard
+
         torch.save(generator.state_dict(), get_checkpoint_path(model_name, "gen_best"))
         torch.save(discriminator.state_dict(), get_checkpoint_path(model_name, "disc_best"))
         print(f"[cGAN] Saved checkpoints for epoch {epoch+1}")
@@ -318,5 +324,26 @@ def train_cgan(
                 verbose=True
             )
 
+        # Save generated samples for visual progress
+        save_cgan_samples(generator, epoch, latent_dim, n_classes, device)
+
     writer.close()
     print("[cGAN] Training complete!")
+
+def save_cgan_samples(generator, epoch, latent_dim, n_classes, device, out_dir="samples", nrow=10, ncol=10):
+    generator.eval()
+    os.makedirs(out_dir, exist_ok=True)
+    with torch.no_grad():
+        z = torch.randn(nrow * ncol, latent_dim, device=device)
+        labels = torch.arange(ncol, device=device).repeat(nrow)
+        imgs = generator(z, labels).detach().cpu()
+        imgs = (imgs + 1) / 2  # [-1,1] to [0,1]
+        grid = vutils.make_grid(imgs, nrow=ncol, padding=2, normalize=False)
+        plt.figure(figsize=(ncol, nrow))
+        plt.axis("off")
+        plt.title(f"Epoch {epoch+1}")
+        plt.imshow(grid.permute(1, 2, 0).squeeze(), cmap='gray' if imgs.shape[1]==1 else None)
+        plt.savefig(os.path.join(out_dir, f"epoch_{epoch+1:03d}.png"), bbox_inches='tight')
+        plt.close()
+    generator.train()
+    return grid

@@ -16,6 +16,9 @@ __pycache__/
 runs/
 events.out.tfevents.*
 
+# Test outputs
+samples/
+
 # VSCode settings
 .vscode/
 
