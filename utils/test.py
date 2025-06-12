@@ -73,7 +73,7 @@ def test_cgan_generator(generator, latent_dim=100, nrow=10, ncol=10, device='cpu
         # For each row, generate ncol digits (0..ncol-1)
         z = torch.randn(nrow * ncol, latent_dim, device=device)
         labels = torch.arange(ncol, device=device).repeat(nrow)
-        fake_imgs = generator(z, labels).detach().cpu()
+        fake_imgs = generator(labels)
         fake_imgs = (fake_imgs + 1) / 2
 
         import torchvision.utils as vutils

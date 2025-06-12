@@ -13,8 +13,8 @@ def get_transforms(dataset_name, augment=False):
                 transforms.RandomHorizontalFlip(),
             ]
         transform_list += [
-            transforms.ToTensor(),
-            transforms.Normalize((0.5,) * 3, (0.5,) * 3)
+            transforms.ToTensor()
+            # No normalization for sigmoid output
         ]
         return transforms.Compose(transform_list)
     elif dataset_name.lower() == "mnist":
@@ -25,8 +25,8 @@ def get_transforms(dataset_name, augment=False):
                 transforms.RandomAffine(degrees=10, translate=(0.1, 0.1))
             ]
         transform_list += [
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,))
+            transforms.ToTensor()
+            # No normalization for sigmoid output
         ]
         return transforms.Compose(transform_list)
     else:

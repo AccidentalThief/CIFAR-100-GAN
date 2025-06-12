@@ -6,10 +6,10 @@ import torch
 from torch.utils.data import DataLoader
 from models.classifier import ClassifierNet
 from models.discriminator import Discriminator
-from models.generator import Generator  # Make sure this exists!
+from models.generator import Generator
 from utils.dataset import get_dataset, get_transforms
 from utils.train import train, get_checkpoint_path, train_cgan
-from utils.test import test, test_cgan_single_digit, test_cgan_generator
+from utils.test import test, test_cgan_generator
 import torch.nn as nn
 import random
 import numpy as np
@@ -26,8 +26,8 @@ def weights_init_normal(m):
 
 if __name__ == "__main__":
     # ---- CONFIGURATION ----
-    # mode: "classifier", "discriminator", or "gan"
-    mode = "gan"              # "classifier", "discriminator", or "gan"
+    # mode: "classifier" or "gan"
+    mode = "gan"              # "classifier" or "gan"
     dataset_name = "mnist"    # "mnist", "cifar10", or "cifar100"
     latent_dim = 100
 
@@ -40,8 +40,8 @@ if __name__ == "__main__":
     trainset, num_classes, input_channels, input_size = get_dataset(dataset_name, train=True, transform=transform)
     testset, _, _, _ = get_dataset(dataset_name, train=False, transform=get_transforms(dataset_name, augment=False))
     print(f"[Main] Creating DataLoaders...")
-    trainloader = DataLoader(trainset, batch_size=512, shuffle=True, num_workers=2)
-    testloader = DataLoader(testset, batch_size=512, shuffle=False, num_workers=2)
+    trainloader = DataLoader(trainset, batch_size=64, shuffle=True, num_workers=2)
+    testloader = DataLoader(testset, batch_size=64, shuffle=False, num_workers=2)
 
     # ---- MODEL, LOSS, OPTIMIZER ----
     print(f"[Main] Setting up model and optimizer for mode: {mode}")
@@ -52,41 +52,26 @@ if __name__ == "__main__":
         model_name = dataset_name
         label_fn = None
         metric_fn = None  # Default: accuracy
-        generator = None
-        optimizer_G = None
-        gan_mode = False
         print(f"[Main] Training classifier...")
-    elif mode == "discriminator":
-        net = Discriminator(n_classes=num_classes, input_channels=input_channels, input_size=input_size)
-        criterion = torch.nn.BCEWithLogitsLoss()
-        optimizer = torch.optim.Adam(net.parameters(), lr=0.0002, betas=(0.5, 0.999))
-        model_name = f"{dataset_name}_disc"
-
-        # Custom label_fn for real images (all real)
-        def label_fn(inputs, outputs, epoch, batch_idx):
-            return torch.ones(inputs.size(0), 1)
-
-        # Custom metric_fn for real/fake accuracy
-        def metric_fn(outputs, labels):
-            preds = (torch.sigmoid(outputs) > 0.5).float()
-            return (preds == labels).float().mean().item()
-
-        # Use the train utility for training the discriminator
-        print(f"[Main] Training discriminator...")
-        
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        net.to(device)
         train(
             net,
             optimizer,
             criterion,
             trainloader,
-            epochs=15,
+            epochs=50,
             patience=5,
             resume_best=False,
             model_name=model_name,
+            checkpoint_subdir="checkpoints",
             label_fn=label_fn,
-            metric_fn=metric_fn
+            metric_fn=metric_fn,
+            scheduler=None,
+            save_images_fn=None,
+            n_classes=num_classes,
+            device=device,
         )
-        
     elif mode == "gan":
         # GAN mode: set up both generator and discriminator
         net = Discriminator(n_classes=num_classes, input_channels=input_channels, input_size=input_size)
@@ -107,7 +92,6 @@ if __name__ == "__main__":
             return (preds == labels).float().mean().item()
 
         print(f"[Main] Training cGAN...")
-        
         train_cgan(
             generator,
             net,
@@ -120,18 +104,17 @@ if __name__ == "__main__":
             model_name=model_name,
             resume_best=False,
             gen_rate=2,
-            lr_ratio=10,
+            lr_ratio=14,
             metric_fn=metric_fn,
             label_fn=label_fn,
         )
-        
     else:
-        raise ValueError("Unknown mode. Use 'classifier', 'discriminator', or 'gan'.")
+        raise ValueError("Unknown mode. Use 'classifier' or 'gan'.")
 
     print(f"[Main] Training complete. Starting evaluation...")
 
     # ---- TESTING ----
-    checkpoint_path = get_checkpoint_path(model_name, "disc_best")
+    checkpoint_path = get_checkpoint_path(model_name, "disc_best" if mode == "gan" else "best")
     try:
         net.load_state_dict(torch.load(checkpoint_path))
         print(f"[Main] Loaded model weights from {checkpoint_path}")
@@ -157,11 +140,11 @@ if __name__ == "__main__":
             print(f"[Main] Could not load generator checkpoint: {e}")
 
         print(f"[Main] Generating sample images from generator...")
-        test_cgan_generator(generator, latent_dim=100, nrow=10, ncol=10, device='cpu')
+        test_cgan_generator(generator, nrow=10, ncol=10, device='cpu')
 
 # ----
 # HOW TO USE:
-# 1. Set 'mode' to "classifier", "discriminator", or "gan" at the top.
+# 1. Set 'mode' to "classifier" or "gan" at the top.
 # 2. Set 'dataset_name' to "mnist", "cifar10", or "cifar100".
 # 3. Make sure models/generator.py exists for GAN mode.
 # 4. Run: python main.py

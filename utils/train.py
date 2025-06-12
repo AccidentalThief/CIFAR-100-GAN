@@ -36,18 +36,12 @@ def train(
     label_fn=None,
     metric_fn=None,
     scheduler=None,
-    generator=None,
-    optimizer_G=None,
-    latent_dim=100,
-    gan_mode=False,
     save_images_fn=None,
     n_classes=10,
     device='cpu',
-    add_noise=False
 ):
     """
-    Unified training function for classifier, discriminator, and cGAN.
-    If gan_mode is True, expects generator, optimizer_G, and uses cGAN training logic.
+    Training function for classifiers only.
     """
     logdir = get_unique_logdir("runs", model_name)
     writer = SummaryWriter(log_dir=logdir)
@@ -68,12 +62,9 @@ def train(
     for epoch in range(epochs):
         print(f"[Train] Epoch {epoch+1}/{epochs}...")
         net.train()
-        if gan_mode and generator is not None:
-            generator.train()
         running_loss = 0.0
         running_metric = 0.0
         total = 0
-        running_g_loss = 0.0
         for i, data in enumerate(trainloader, 0):
             if i == 0:
                 print(f"[Train] First batch loaded. Batch size: {len(data[0]) if isinstance(data, (list, tuple)) else len(data)}")
@@ -83,96 +74,43 @@ def train(
                 inputs = data
                 labels = None
 
+            inputs = inputs.to(device)
+            if labels is not None:
+                labels = labels.to(device)
             batch_total = inputs.size(0)
 
-            if gan_mode and generator is not None and optimizer_G is not None:
-                device = next(net.parameters()).device
-                real_imgs = inputs.to(device)
-                if add_noise:
-                    real_imgs += 0.05 * torch.randn_like(real_imgs)
-                valid = torch.ones(batch_total, 1, device=device)
-                fake = torch.zeros(batch_total, 1, device=device)
+            optimizer.zero_grad()
+            outputs = net(inputs)
+            if label_fn is not None:
+                labels = label_fn(inputs, outputs, epoch, i)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
-                # 1. Train Generator (optionally more than once)
-                g_loss = 0
-                z = torch.randn(batch_total, latent_dim, device=device)
-                gen_labels = torch.randint(0, n_classes, (batch_total,), device=device)
-                gen_imgs = generator(z, gen_labels)
-                g_loss = criterion(net(gen_imgs, gen_labels), valid)
-                g_loss.backward()
-                optimizer_G.step()
-
-                # 2. Train Discriminator
-                optimizer.zero_grad()
-                real_loss = criterion(net(real_imgs, labels), valid)
-                fake_loss = criterion(net(gen_imgs.detach(), gen_labels), fake)
-                d_loss = (real_loss + fake_loss) / 2
-                d_loss.backward()
-                optimizer.step()
-
-                # Logging
-                writer.add_scalar('MiniBatch/D_Loss', d_loss.item(), global_step)
-                writer.add_scalar('MiniBatch/G_Loss', g_loss.item(), global_step)
-                running_loss += d_loss.item() * batch_total
-                running_g_loss += g_loss.item() * batch_total
-                if metric_fn is not None:
-                    batch_metric = metric_fn(net(real_imgs, labels), valid)
-                else:
-                    batch_metric = 0
-                writer.add_scalar('MiniBatch/Metric', batch_metric, global_step)
-                running_metric += batch_metric * batch_total
-                total += batch_total
-                global_step += 1
+            batch_loss = loss.item()
+            if metric_fn is not None:
+                batch_metric = metric_fn(outputs, labels)
             else:
-                optimizer.zero_grad()
-                outputs = net(inputs, labels) if labels is not None else net(inputs)
-                if label_fn is not None:
-                    labels = label_fn(inputs, outputs, epoch, i)
-                loss = criterion(outputs, labels)
-                loss.backward()
-                optimizer.step()
+                _, predicted = torch.max(outputs.data, 1)
+                batch_metric = (predicted == labels).sum().item() / batch_total if labels is not None else 0
 
-                batch_loss = loss.item()
-                if metric_fn is not None:
-                    # Use real images and labels for metric
-                    metric = metric_fn(discriminator(real_imgs, labels), valid)
-                    writer.add_scalar('MiniBatch/Metric', metric, global_step)
-                else:
-                    _, predicted = torch.max(outputs.data, 1)
-                    batch_metric = (predicted == labels).sum().item() / batch_total if labels is not None else 0
+            writer.add_scalar('MiniBatch/Loss', batch_loss, global_step)
+            writer.add_scalar('MiniBatch/Metric', batch_metric, global_step)
+            running_loss += batch_loss * batch_total
+            running_metric += batch_metric * batch_total
+            total += batch_total
+            global_step += 1
 
-                writer.add_scalar('MiniBatch/Loss', batch_loss, global_step)
-                writer.add_scalar('MiniBatch/Metric', batch_metric, global_step)
-                running_loss += batch_loss * batch_total
-                running_metric += batch_metric * batch_total
-                total += batch_total
-                global_step += 1
-
-        # Epoch logging
-        if gan_mode and generator is not None:
-            epoch_d_loss = running_loss / total
-            epoch_g_loss = running_g_loss / total
-            epoch_metric = running_metric / total
-            writer.add_scalar('Epoch/D_Loss', epoch_d_loss, epoch)
-            writer.add_scalar('Epoch/G_Loss', epoch_g_loss, epoch)
-            writer.add_scalar('Epoch/Metric', epoch_metric, epoch)
-            print(f'Epoch {epoch+1}: D_Loss: {epoch_d_loss:.4f}, G_Loss: {epoch_g_loss:.4f}, Metric: {epoch_metric:.4f}')
-            if save_images_fn is not None:
-                save_images_fn(epoch, generator)
-            epoch_loss = epoch_d_loss
-        else:
-            epoch_loss = running_loss / total
-            epoch_metric = running_metric / total
-            writer.add_scalar('Epoch/Loss', epoch_loss, epoch)
-            writer.add_scalar('Epoch/Metric', epoch_metric, epoch)
-            print(f'Epoch {epoch+1}: Loss: {epoch_loss:.4f}, Metric: {epoch_metric:.4f}')
+        epoch_loss = running_loss / total
+        epoch_metric = running_metric / total
+        writer.add_scalar('Epoch/Loss', epoch_loss, epoch)
+        writer.add_scalar('Epoch/Metric', epoch_metric, epoch)
+        print(f'Epoch {epoch+1}: Loss: {epoch_loss:.4f}, Metric: {epoch_metric:.4f}')
 
         if epoch_metric > best_metric:
             best_metric = epoch_metric
             epochs_no_improve = 0
             torch.save(net.state_dict(), get_checkpoint_path(model_name, "best", checkpoint_subdir))
-            if gan_mode and generator is not None:
-                torch.save(generator.state_dict(), get_checkpoint_path(model_name, "gen_best", checkpoint_subdir))
             print(f"Checkpoint: Saved new best model at epoch {epoch+1} with metric {epoch_metric:.4f}")
         else:
             epochs_no_improve += 1
@@ -189,8 +127,6 @@ def train(
     print(f'[Train] Finished Training for model {model_name}')
     PATH = get_checkpoint_path(model_name, "last", checkpoint_subdir)
     torch.save(net.state_dict(), PATH)
-    if gan_mode and generator is not None:
-        torch.save(generator.state_dict(), get_checkpoint_path(model_name, "gen_last", checkpoint_subdir))
     print(f'[Train] Last model saved to {PATH}')
 
 def train_cgan(
@@ -213,15 +149,16 @@ def train_cgan(
 ):
     import torch.nn as nn
     import torch.optim as optim
+    from torch.nn import functional as F
     from .train import get_checkpoint_path, get_unique_logdir
 
     logdir = get_unique_logdir("runs", f"{model_name}_cgan")
     writer = SummaryWriter(log_dir=logdir)
     print(f"[cGAN] Logging to {logdir}")
     print(f"[cGAN] Starting cGAN training for {epochs} epochs on device {device}.")
-    adversarial_loss = nn.BCEWithLogitsLoss()
-    optimizer_G = optim.Adam(generator.parameters(), lr=lr, betas=(0.5, 0.999))
-    optimizer_D = optim.Adam(discriminator.parameters(), lr=lr/lr_ratio, betas=(0.5, 0.999))
+    loss_function = F.binary_cross_entropy_with_logits
+    optimizer_G = optim.Adam(generator.parameters(), lr=lr)
+    optimizer_D = optim.Adam(discriminator.parameters(), lr=lr)
 
     generator.to(device)
     discriminator.to(device)
@@ -254,28 +191,24 @@ def train_cgan(
                 print(f"[cGAN] First batch loaded. Batch size: {imgs.size(0)}")
             batch_size = imgs.size(0)
             real_imgs = imgs.to(device)
-            real_imgs += 0.1 * torch.randn_like(real_imgs)
             labels = labels.to(device)
             valid = torch.ones(batch_size, 1, device=device)
             fake = torch.zeros(batch_size, 1, device=device)
 
-            # Train Generator
-            for _ in range(gen_rate):
-                optimizer_G.zero_grad()
-                z = torch.randn(batch_size, latent_dim, device=device)
-                gen_labels = torch.randint(0, n_classes, (batch_size,), device=device)
-                gen_imgs = generator(z, gen_labels)
-                g_loss = adversarial_loss(discriminator(gen_imgs, gen_labels), valid)
-                g_loss.backward()
-                optimizer_G.step()
-
             # Train Discriminator
+            d_loss = loss_function(discriminator(real_imgs, labels), valid)
+            d_loss += loss_function(discriminator(generator(labels), labels), fake)
+
             optimizer_D.zero_grad()
-            real_loss = adversarial_loss(discriminator(real_imgs, labels), valid)
-            fake_loss = adversarial_loss(discriminator(gen_imgs.detach(), gen_labels), fake)
-            d_loss = (real_loss + fake_loss) / 2
             d_loss.backward()
             optimizer_D.step()
+
+            # Train Generator
+            g_loss = loss_function(discriminator(generator(labels), labels), valid)
+
+            optimizer_G.zero_grad()
+            g_loss.backward()
+            optimizer_G.step()
 
             # Logging
             writer.add_scalar('MiniBatch/D_Loss', d_loss.item(), global_step)
@@ -291,10 +224,6 @@ def train_cgan(
             running_d_loss += d_loss.item() * batch_size
             total += batch_size
             global_step += 1
-
-            if i % (batch_size // 5) == 0:
-                print(f"[cGAN] [Epoch {epoch+1}/{epochs}] [Batch {i}/{len(trainloader)}] "
-                      f"[D loss: {d_loss.item():.4f}] [G loss: {g_loss.item():.4f}] [Metric: {metric:.4f}]")
 
         # Epoch logging
         epoch_g_loss = running_g_loss / total
@@ -334,9 +263,8 @@ def save_cgan_samples(generator, epoch, latent_dim, n_classes, device, out_dir="
     generator.eval()
     os.makedirs(out_dir, exist_ok=True)
     with torch.no_grad():
-        z = torch.randn(nrow * ncol, latent_dim, device=device)
         labels = torch.arange(ncol, device=device).repeat(nrow)
-        imgs = generator(z, labels).detach().cpu()
+        imgs = generator(labels).detach().cpu()  # z is generated inside the generator
         imgs = (imgs + 1) / 2  # [-1,1] to [0,1]
         grid = vutils.make_grid(imgs, nrow=ncol, padding=2, normalize=False)
         plt.figure(figsize=(ncol, nrow))
