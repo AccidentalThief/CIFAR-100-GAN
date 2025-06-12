@@ -10,7 +10,7 @@ This project is a modular PyTorch framework for both **conditional GANs (cGANs)*
 - **Conditional GANs:** Full support for cGANs with one-hot label conditioning and deep label feature injection.
 - **Modular codebase:** Clean separation of models, training, testing, and data loading.
 - **Automatic checkpointing:** Best and last models are saved for each dataset and mode.
-- **TensorBoard integration:** Visualize training loss, accuracy, and GAN progress in real time.
+- **TensorBoard integration:** Visualize training loss, accuracy, and GAN progress in real time. (use <= python 3.12)
 - **Sample image saving:** Generated images are saved every epoch for visual inspection.
 - **Reproducibility:** Paths and checkpoints are robust to different working directories.
 - **Device agnostic:** Seamless CPU/GPU support.
@@ -19,11 +19,11 @@ This project is a modular PyTorch framework for both **conditional GANs (cGANs)*
 
 ## Results
 
-| Dataset   | Classifier Accuracy | GAN Quality (visual) |
-|-----------|---------------------|----------------------|
-| CIFAR-100 |   60.7%             | Good class separation|
-| CIFAR-10  |   83.11%            | Sharp, colorful      |
-| MNIST     |   99.29%            | Crisp digits, black backgrounds |
+| Dataset   | Classifier Accuracy |
+|-----------|---------------------|
+| CIFAR-100 |   60.7%             |
+| CIFAR-10  |   83.11%            |
+| MNIST     |   99.29%            |
 
 *All results are on the test set using the provided classifier architecture and default training settings. GAN quality is based on visual inspection of generated samples.*
 
