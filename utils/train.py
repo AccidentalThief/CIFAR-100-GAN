@@ -264,13 +264,12 @@ def save_cgan_samples(generator, epoch, latent_dim, n_classes, device, out_dir="
     os.makedirs(out_dir, exist_ok=True)
     with torch.no_grad():
         labels = torch.arange(ncol, device=device).repeat(nrow)
-        imgs = generator(labels).detach().cpu()  # z is generated inside the generator
-        imgs = (imgs + 1) / 2  # [-1,1] to [0,1]
+        imgs = generator(labels).detach().cpu()  # imgs in [0,1] because of Sigmoid
         grid = vutils.make_grid(imgs, nrow=ncol, padding=2, normalize=False)
         plt.figure(figsize=(ncol, nrow))
         plt.axis("off")
         plt.title(f"Epoch {epoch+1}")
-        plt.imshow(grid.permute(1, 2, 0).squeeze(), cmap='gray' if imgs.shape[1]==1 else None)
+        plt.imshow(grid.permute(1, 2, 0).squeeze(), cmap='gray' if imgs.shape[1]==1 else None, vmin=0, vmax=1)
         plt.savefig(os.path.join(out_dir, f"epoch_{epoch+1:03d}.png"), bbox_inches='tight')
         plt.close()
     generator.train()
