@@ -14,6 +14,7 @@ def test(
     verbose=True
 ):
     net.eval()
+    device = next(net.parameters()).device  # Get model device
     correct = 0
     total = 0
     test_loss = 0.0
@@ -26,6 +27,10 @@ def test(
             else:
                 images = data
                 labels = None
+
+            images = images.to(device)
+            if labels is not None:
+                labels = labels.to(device)
 
             if hasattr(net, "label_emb"):
                 outputs = net(images, labels)

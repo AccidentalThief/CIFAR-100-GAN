@@ -138,6 +138,9 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"[Main] Could not load checkpoint: {e}")
 
+    # Move model to device before testing
+    net.to(device)
+
     test(
         net, testloader, criterion=criterion,
         metric_fn=metric_fn,
